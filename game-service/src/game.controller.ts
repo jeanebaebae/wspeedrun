@@ -1,17 +1,28 @@
 // game.controller.ts
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
 import { GameService } from './game.service';
 import { CreateGameDto } from './dto/create-game.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
-import { Roles } from './auth/roles.decorator'; 
+import { Roles } from './auth/roles.decorator';
+import { UpdateGameDto } from './dto/update-game.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
+@ApiBearerAuth('access-token')
 @Controller()
 export class GameController {
   constructor(private readonly gameService: GameService) {}
-
- 
 
   @Get('games')
   getAllGames() {
@@ -28,8 +39,6 @@ export class GameController {
     return this.gameService.getCategoryDetails(id);
   }
 
-  
-
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Post('admin/games')
@@ -40,7 +49,10 @@ export class GameController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Patch('admin/games/:id/update')
-  updateGame(@Param('id') id: string, @Body() updateGameDto: Partial<CreateGameDto>) {
+  updateGame(
+    @Param('id') id: string,
+    @Body() updateGameDto: UpdateGameDto
+  ) {
     return this.gameService.updateGame(id, updateGameDto);
   }
 
@@ -61,7 +73,10 @@ export class GameController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Patch('admin/categories/:id/update')
-  updateCategory(@Param('id') id: string, @Body() updateCategoryDto: Partial<CreateCategoryDto>) {
+  updateCategory(
+    @Param('id') id: string,
+    @Body() updateCategoryDto: UpdateCategoryDto,
+  ) {
     return this.gameService.updateCategory(id, updateCategoryDto);
   }
 
