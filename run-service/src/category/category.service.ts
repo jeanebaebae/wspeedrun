@@ -1,15 +1,16 @@
 import {
+  BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  ForbiddenException,
-  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { randomUUID } from 'crypto';
+import { CreateCategoryDto } from '../dto/create-category.dto';
+import { UpdateCategoryDto } from '../dto/update-category.dto';
 
 @Injectable()
 export class CategoryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async getCategoryDetails(categoryId: string) {
     const category = await this.prisma.runCategory.findUnique({
@@ -25,7 +26,7 @@ export class CategoryService {
     return category;
   }
 
-  async createCategory(createCategoryDto: any, userRole: string) {
+  async createCategory(createCategoryDto: CreateCategoryDto, userRole: string) {
     if (userRole !== 'ADMIN') {
       throw new ForbiddenException('Admin access required');
     }
@@ -33,16 +34,17 @@ export class CategoryService {
     const { game_id, run_category_name } = createCategoryDto;
 
     if (!game_id) {
-      throw new BadRequestException('Game id must be filled');
+      throw new BadRequestException('Game ID is required');
     }
 
-    if (!run_category_name) {
-      throw new BadRequestException('Run category name must be filled');
+    if (!run_category_name || run_category_name.trim() === '') {
+      throw new BadRequestException('Run category name is required');
     }
+
+    await this.validateGameExists(game_id);
 
     const category = await this.prisma.runCategory.create({
       data: {
-        run_category_id: randomUUID(),
         game_id,
         run_category_name,
       },
@@ -54,7 +56,11 @@ export class CategoryService {
     };
   }
 
-  async updateCategory(categoryId: string, updateData: any, userRole: string) {
+  async updateCategory(
+    categoryId: string,
+    updateCategoryDto: UpdateCategoryDto,
+    userRole: string,
+  ) {
     if (userRole !== 'ADMIN') {
       throw new ForbiddenException('Admin access required');
     }
@@ -69,7 +75,15 @@ export class CategoryService {
       throw new NotFoundException('Run category not found');
     }
 
-    const { game_id, run_category_name } = updateData;
+    const { game_id, run_category_name } = updateCategoryDto;
+
+    if (!game_id && !run_category_name) {
+      throw new BadRequestException('No data provided for update');
+    }
+
+    if (game_id) {
+      await this.validateGameExists(game_id);
+    }
 
     const updatedCategory = await this.prisma.runCategory.update({
       where: {
@@ -111,5 +125,32 @@ export class CategoryService {
     return {
       message: 'Category deleted successfully',
     };
+  }
+
+  private async validateGameExists(gameId: string) {
+    const gameServiceUrl = process.env.GAME_SERVICE_URL || 'http://localhost:3001';
+
+    try {
+      const response = await fetch(`${gameServiceUrl}/games/${gameId}`);
+
+      if (response.status === 404) {
+        throw new NotFoundException('Game ID does not exist');
+      }
+
+      if (!response.ok) {
+        throw new BadRequestException('Failed to validate game ID');
+      }
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      throw new BadRequestException(
+        'Cannot validate game ID because Game Service is unavailable',
+      );
+    }
   }
 }

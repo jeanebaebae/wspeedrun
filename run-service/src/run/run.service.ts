@@ -21,7 +21,7 @@ export class RunService {
       throw new BadRequestException('Run category ID is required');
     }
 
-    if (!vod_url) {
+    if (!vod_url || vod_url.trim() === '') {
       throw new BadRequestException('VOD URL is required');
     }
 
@@ -57,11 +57,7 @@ export class RunService {
 
     return {
       message: 'Run entry created successfully',
-      data: {
-        ...run,
-        run_duration: Number(run.run_duration),
-        run_duration_formatted: this.formatDuration(Number(run.run_duration)),
-      },
+      data: this.formatRun(run, category),
     };
   }
 
@@ -90,11 +86,13 @@ export class RunService {
       },
     });
 
-    return runs.map((run) => ({
-      ...run,
-      run_duration: Number(run.run_duration),
-      run_duration_formatted: this.formatDuration(Number(run.run_duration)),
-    }));
+    const game = await this.getGameInfo(category.game_id);
+
+    return runs.map((run) =>
+      this.formatRun(run, category, game, {
+        user_id: run.user_id,
+      }),
+    );
   }
 
   async getRunsByUser(requestedUserId: string, authenticatedUserId: string) {
@@ -121,11 +119,7 @@ export class RunService {
       },
     });
 
-    return runs.map((run) => ({
-      ...run,
-      run_duration: Number(run.run_duration),
-      run_duration_formatted: this.formatDuration(Number(run.run_duration)),
-    }));
+    return runs.map((run) => this.formatRun(run));
   }
 
   async getRunDetails(runId: string) {
@@ -151,18 +145,71 @@ export class RunService {
       throw new NotFoundException('Run not found');
     }
 
+    const game = run.category ? await this.getGameInfo(run.category.game_id) : null;
+
     return {
-      ...run,
-      run_duration: Number(run.run_duration),
-      run_duration_formatted: this.formatDuration(Number(run.run_duration)),
+      ...this.formatRun(run, run.category, game, {
+        user_id: run.user_id,
+      }),
+      comments: run.comments,
     };
   }
 
-  private formatDuration(seconds: number): string {
+  private formatRun(run: any, category?: any, game?: any, runner?: any) {
+    return {
+      run_id: run.run_id,
+      run_category_id: run.run_category_id,
+      user_id: run.user_id,
+      vod_url: run.vod_url,
+      run_duration: Number(run.run_duration),
+      run_duration_formatted: this.formatDuration(Number(run.run_duration)),
+      submitted_at: run.submitted_at,
+      verified_at: run.verified_at,
+      status: run.status,
+
+      category: category
+        ? {
+            run_category_id: category.run_category_id,
+            run_category_name: category.run_category_name,
+            game_id: category.game_id,
+          }
+        : undefined,
+
+      game: game || undefined,
+
+      runner: runner || undefined,
+    };
+  }
+
+  private async getGameInfo(gameId: string) {
+    const gameServiceUrl = process.env.GAME_SERVICE_URL || 'http://localhost:3001';
+
+    try {
+      const response = await fetch(`${gameServiceUrl}/games/${gameId}`);
+
+      if (!response.ok) {
+        return {
+          game_id: gameId,
+          message: 'Game information unavailable',
+        };
+      }
+
+      return await response.json();
+    } catch {
+      return {
+        game_id: gameId,
+        message: 'Game Service unavailable',
+      };
+    }
+  }
+
+    private formatDuration(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
 
-    return `${hours} Hour(s) ${minutes} Minute(s) ${secs} Second(s)`;
-  }
+    return `${hours.toString().padStart(2, '0')} Hour(s) ` +
+            `${minutes.toString().padStart(2, '0')} Minute(s) ` +
+            `${secs.toString().padStart(2, '0')} Second(s)`;
+    }
 }
